@@ -1,44 +1,47 @@
 #!/bin/bash
 #dbbackupsql.sh
-
-#this part automatically logs in the user
+sqldb_host"localhost"
 sqldb_user="root"
 sqldb_pw=""
-
-dbsql_checklogin()
-{
-  if [${mysql_pw}]
-  then
-    mysql -u "${sqldb_user}" -p "${mysql_pw}" -e "SHOW DATABASES;"
-  else
-    mysql -u "${sql_user}" -e "SHOW DATABASES"
-  fi
-}
-
-#magical pathz
 sqldb_dumpdir="/opt/dump-backup"
 sqldb_sourcedir="/var/lib/mysql/"
+timestamp="date +%Y_%m_%d_%H_%M"
+sqldb_label="mportant_files"
+min_old="15"
 
-#checks for the backup directory
-  if [ ! -e "${sqldb_dumpdir}" ];
+#this part automatically logs in the user
+  echo "Signing up mysql user.."
+
+  if [$mysql_pw]
   then
-    echo "Backup directory exist ${sqldb_dumpdir}!"
+    mysql -h -u "$sqldb_user" -p "$mysql_pw" -e "SHOW DATABASES;"
   else
-    mkdir -p ${sqldb_dumpdir}
-    echo "Directory created for database backup!: ${sqldb_dumpdir}"
+    mysql -u "$sql_user" -e "SHOW DATABASES"
   fi
 
-#this part creates backup for the database
-timestamp="date +%Y_%m_%d_%H_%M"
-sqldb_label="important_files"
+#checks for the backup directory
+  if [ ! -e "$sqldb_dumpdir" ];
+  then
+    echo "Backup directory already exist. $sqldb_dumpdir"
+  else
+    mkdir -p $sqldb_dumpdir
+    echo "Directory created for database backup. $sqldb_dumpdir"
+  fi
 
-  echo "Creating Backup.."
-  for ${sqldb_label} in ${sqldb_sourcedir};
+#this part creates && compress backup for the database
+  echo "Creating Backup for $sqldb_label"
+
+  for ((i=0;i<$sqldb_label;i++)); do
   do
-    echo " - $sqldb_label"
-    mysqldump --user=${sql_user} --password=${sqldb_pw} ${sqldb_label} > ${sqldb_dumpdir}/${sqldb_label}-MySQL-backup-${timestamp}.sql
+    mysqldump -h "$sqldb_host" -u "$sql_user" -p "$sqldb_pw" ${sqldb_label[$i]} > $sqldb_sourcedir/${sqldb_label[$i]}-MySQL-backup-$timestamp.sql
   done
-  echo "Backup for database is successfull"
-#this part backups the database every 5mins using crontab
 
-#this path backups the dump directory
+  echo "Compressing Databases..."
+  cd $sqldb_sourcedir// && tar -czf $sqldb_dumpdir/$sqldb_label-$timestamp.tar.gz *.sql
+
+#this part backups the database every 5mins using crontab
+  #
+#this part deletes older backups
+  echo "Deleting backups older than $min_old minutes..."
+  find $sqldb_dumpdir/$sqldb_label*.tar.gz -mmin +$min_old -exec rm {} \;
+  echo "Done."
